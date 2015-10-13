@@ -1,0 +1,35 @@
+<template name="game">
+{{#with game}}
+
+	<aside class="game-info">
+	<p>{{id}}</p>
+		<ul class="player-info">
+			<li class="player {{#if active 1}}active{{/if}}">
+				<p class="label">Spieler 1</p><p class="name">Iris Gleichen</p>
+			
+			</li>
+			<li class="player {{#if active 2}}active{{/if}}">
+				<p class="label">Spieler 2</p><p class="name">Rainer Zufall</p>
+			
+			</li>
+		</ul>
+		<p class="game-desc">The cross-functional, dramatic, large-scale and results-oriented innovations interact with our governance using our scenario-based projects. </p>
+	</aside>
+
+	<div class="game-canvas">
+
+	{{>game_canvas}}
+
+	</div>
+	{{else}}
+	no game found
+	{{/with}}
+</template>
+
+<template name="game_canvas">
+<button class="btn btn-doTurn">do Turn</button>
+	<div class="game_canvas container">
+
+	</div>
+
+</template>

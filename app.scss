@@ -1,0 +1,16 @@
+
+
+.game_canvas {
+	width: 100%;
+	height: 500px;
+
+
+}
+
+.game-info {
+	.player {
+		&.active {
+			font-weight: bold;
+		}
+	}
+}
