@@ -25,7 +25,23 @@ if(Meteor.isClient) {
 			return number === this.currentPlayer
 		}
 	});
-
+	var getIntersections = function({clientX, clientY}, template) {
+		// http://barkofthebyte.azurewebsites.net/post/2014/05/05/three-js-projecting-mouse-clicks-to-a-3d-scene-how-to-do-it-and-how-it-works
+			let {camera, scene, hoverTokens} = template.three;
+			let $container =  template.$(".container");
+			let offset = $container.offset();
+			let mouse3D = new THREE.Vector3(
+				((clientX - offset.left) / $container.width()) * 2 - 1,
+				-((clientY -offset.top)/ $container.height()) * 2 + 1,
+				0.5);
+			
+			
+			mouse3D.unproject(camera);
+			
+			var ray = new THREE.Raycaster( camera.position, mouse3D.sub( camera.position ).normalize() );
+			return ray.intersectObjects(hoverTokens );
+			
+	}
 	Template.game_canvas.events({
 		'click .btn-doTurn': function (event, template) {
 			Meteor.call("doTurn", {x: 0, game_id: template.data._id}, (error, tokenId) => {
@@ -34,7 +50,30 @@ if(Meteor.isClient) {
 				template.three.controls.center.set(x,y,z);
 				template.three.controls.update()
 			});
+		},
+		'mousemove': function({clientX, clientY}, template) {
+			let {hoverTokens} = template.three;
+			for(let token of hoverTokens) {
+				token.material.opacity = 0;
+			}
+			for(let {object} of getIntersections({clientX, clientY}, template)) {
+				object.material.opacity = 0.5;
+			}
+			
+		},
+		'mouseup': function({clientX, clientY}, template) {
+			let intersections = getIntersections({clientX, clientY}, template);
+			if(intersections.length > 0)
+			{
+				let {object} = intersections[0];
+				Meteor.call("doTurn", {game_id: template.data._id, x: object.tokenX});
+
+			}
+
+
 		}
+
+				
 	});
 
 	
@@ -44,13 +83,13 @@ if(Meteor.isClient) {
 
 		let renderer = new THREE.WebGLRenderer({antialias:true});
 		let scene = new THREE.Scene();
-
+	
 		let camera = new THREE.PerspectiveCamera(75, this.$(".container").width()/this.$(".container").height(), 0.1, 1000);
 		window.camera = camera;
 		window.camera.position.set(300,0,300);
 		let controls = new THREE.OrbitControls(camera, renderer.domElement);
 
-		this.three = {tokensOnScene, camera, renderer, scene, controls};
+		this.three = {hoverTokens, tokensOnScene, camera, renderer, scene, controls};
 
 		renderer.setClearColor( 0xffffff, 1 );
 		renderer.setPixelRatio(window.devicePixelRatio);
@@ -68,7 +107,7 @@ if(Meteor.isClient) {
 			let token = Helpers.createHoverToken();
 			hoverTokens[x] = token;
 			token.position.set(...Helpers.getScaledPosition({x,y:0}));
-			
+			token.tokenX = x;
 			scene.add(token);
 		}
 
@@ -77,6 +116,7 @@ if(Meteor.isClient) {
 				let y = Helpers.getNextFreeYPosition({game_id:this.data._id, x});
 				let [newX, newY, newZ] = Helpers.getScaledPosition({x, y});
 				hoverTokens[x].position.setY(newY);
+
 
 			}
 		}
@@ -139,8 +179,8 @@ Helpers = {
 	},
 	createHoverToken() {
 		let geometry = new THREE.CylinderGeometry(22, 22, 10, 32 );
-		let color = "yellow";
-		let material = new THREE.MeshBasicMaterial({color});
+		let color = "green";
+		let material = new THREE.MeshBasicMaterial({color, opacity: 0, transparent: true});
 		let token = new THREE.Mesh(geometry, material);
 		token.rotateX(Math.PI/2);
 		return token;
