@@ -25,23 +25,16 @@ if(Meteor.isClient) {
 			return number === this.currentPlayer
 		}
 	});
-	var getIntersections = function({clientX, clientY}, template) {
-		// http://barkofthebyte.azurewebsites.net/post/2014/05/05/three-js-projecting-mouse-clicks-to-a-3d-scene-how-to-do-it-and-how-it-works
-			let {camera, scene, hoverTokens} = template.three;
-			let $container =  template.$(".container");
-			let offset = $container.offset();
-			let mouse3D = new THREE.Vector3(
-				((clientX - offset.left) / $container.width()) * 2 - 1,
-				-((clientY -offset.top)/ $container.height()) * 2 + 1,
-				0.5);
-			
-			
-			mouse3D.unproject(camera);
-			
-			var ray = new THREE.Raycaster( camera.position, mouse3D.sub( camera.position ).normalize() );
-			return ray.intersectObjects(hoverTokens );
-			
+
+	var update3dMouse = function({clientX, clientY, template}) {
+		// update 3d mouse position
+		let {mouse, raycaster} = template.three;
+		let $container =  template.$(".container");
+		let offset = $container.offset();
+		mouse.x = ((clientX - offset.left) / $container.width()) * 2 - 1;
+		mouse.y = -((clientY -offset.top)/ $container.height()) * 2 + 1;
 	}
+	
 	Template.game_canvas.events({
 		'click .btn-doTurn': function (event, template) {
 			Meteor.call("doTurn", {x: 0, game_id: template.data._id}, (error, tokenId) => {
@@ -52,17 +45,12 @@ if(Meteor.isClient) {
 			});
 		},
 		'mousemove': function({clientX, clientY}, template) {
-			let {hoverTokens} = template.three;
-			for(let token of hoverTokens) {
-				token.material.opacity = 0;
-			}
-			for(let {object} of getIntersections({clientX, clientY}, template)) {
-				object.material.opacity = 0.5;
-			}
-			
+			update3dMouse({clientX, clientY, template});
 		},
 		'mouseup': function({clientX, clientY}, template) {
-			let intersections = getIntersections({clientX, clientY}, template);
+			update3dMouse({clientX, clientY, template});
+			let {raycaster, hoverTokens} = template.three;
+			let intersections = raycaster.intersectObjects(hoverTokens);
 			if(intersections.length > 0)
 			{
 				let {object} = intersections[0];
@@ -80,27 +68,29 @@ if(Meteor.isClient) {
 	Template.game_canvas.onRendered(function(){
 		let tokensOnScene = new Map();
 		let hoverTokens = [];
-
+		let $container = this.$(".container");
 		let renderer = new THREE.WebGLRenderer({antialias:true});
 		let scene = new THREE.Scene();
-	
-		let camera = new THREE.PerspectiveCamera(75, this.$(".container").width()/this.$(".container").height(), 0.1, 1000);
+		let raycaster = new THREE.Raycaster();
+		let camera = new THREE.PerspectiveCamera(75, $container.width()/$container.height(), 0.1, 1000);
 		window.camera = camera;
 		window.camera.position.set(300,0,300);
 		let controls = new THREE.OrbitControls(camera, renderer.domElement);
-
-		this.three = {hoverTokens, tokensOnScene, camera, renderer, scene, controls};
+		let mouse = new THREE.Vector2();
+		this.three = {mouse, hoverTokens, tokensOnScene, camera, renderer, scene, controls, raycaster};
 
 		renderer.setClearColor( 0xffffff, 1 );
 		renderer.setPixelRatio(window.devicePixelRatio);
-		renderer.setSize(this.$(".container").width(), this.$(".container").height());
-		this.$(".container").append(renderer.domElement);
+		renderer.setSize($container.width(), $container.height());
+		$container.append(renderer.domElement);
 
 		scene.add(new THREE.AmbientLight(0x505050));
 		let light = new THREE.SpotLight(0xffffff, 1.5);
-		light.position.set(0,500,2000);
+		light.position.set(100,500,200);
 		light.castShadow = true;
 		scene.add(light);
+
+
 
 		// add fake hover tokens
 		for(let x = 0; x<WIDTH; x++) {
@@ -117,16 +107,32 @@ if(Meteor.isClient) {
 				let [newX, newY, newZ] = Helpers.getScaledPosition({x, y});
 				hoverTokens[x].position.setY(newY);
 
-
 			}
 		}
 
+		onWindowResize = () => {
+			let width = $container.width();
+			let height = $container.height();
+			camera.aspect = width / height;
+    		camera.updateProjectionMatrix();
+    		renderer.setSize(width,height);
+		}
+		$(window).on("resize", onWindowResize);
+		this.view.onViewDestroyed(() => {$(window).off("resize", onWindowResize)});
 
 	 	// main render loop
 	 	render = (time) => {
 	 		if(!this.view.isDestroyed) {
 	 			requestAnimationFrame(render);
 	 			renderer.render(scene, camera);
+	 			raycaster.setFromCamera(mouse, camera);
+	 			// update mouse over
+	 			for(token of hoverTokens) {
+	 				if(raycaster.intersectObject(token).length > 0)
+	 					token.material.opacity = 0.5;
+	 				else
+	 					token.material.opacity = 0;
+	 			}
 	 			//TWEEN.update(time);
 	 		}
 	 	}
@@ -160,6 +166,7 @@ if(Meteor.isClient) {
 	 	this.view.onViewDestroyed(()=> {
 	 		observeHandle.stop();
 	 		tokensOnScene.clear();
+
 	 	});
 
 
@@ -172,7 +179,7 @@ Helpers = {
 	createToken({playerNumber}) {
 		let geometry = new THREE.CylinderGeometry(22, 22, 10, 32 );
 		let color = playerNumber === 1 ? "red" : "blue";
-		let material = new THREE.MeshBasicMaterial({color});
+		let material = new THREE.MeshLambertMaterial({color});
 		let token = new THREE.Mesh(geometry, material);
 		token.rotateX(Math.PI/2);
 		return token;
@@ -180,7 +187,7 @@ Helpers = {
 	createHoverToken() {
 		let geometry = new THREE.CylinderGeometry(22, 22, 10, 32 );
 		let color = "green";
-		let material = new THREE.MeshBasicMaterial({color, opacity: 0, transparent: true});
+		let material = new THREE.MeshLambertMaterial({color, opacity: 0, transparent: true});
 		let token = new THREE.Mesh(geometry, material);
 		token.rotateX(Math.PI/2);
 		return token;
