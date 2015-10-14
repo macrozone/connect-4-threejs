@@ -2,6 +2,8 @@
 var WIDTH = 8;
 var HEIGHT = 8;
 
+let SCALE = 50;
+
 Router.route("/game/:_id", {
 	name: "game",
 	data() {
@@ -49,12 +51,14 @@ if(Meteor.isClient) {
 		},
 		'mouseup': function({clientX, clientY}, template) {
 			update3dMouse({clientX, clientY, template});
-			let {raycaster, hoverTokens} = template.three;
+			let {raycaster, hoverTokens, tokensOnScene, camera} = template.three;
 			let intersections = raycaster.intersectObjects(hoverTokens);
 			if(intersections.length > 0)
 			{
 				let {object} = intersections[0];
-				Meteor.call("doTurn", {game_id: template.data._id, x: object.tokenX});
+				Meteor.call("doTurn", {game_id: template.data._id, x: object.tokenX}, (error, newtokenId) => {
+					
+				});
 
 			}
 
@@ -72,13 +76,19 @@ if(Meteor.isClient) {
 		let renderer = new THREE.WebGLRenderer({antialias:true});
 		let scene = new THREE.Scene();
 		let raycaster = new THREE.Raycaster();
-		let camera = new THREE.PerspectiveCamera(75, $container.width()/$container.height(), 0.1, 1000);
-		window.camera = camera;
-		window.camera.position.set(300,0,300);
+		let camera = new THREE.PerspectiveCamera(75, $container.width()/$container.height(), 0.1, 10000);
 		let controls = new THREE.OrbitControls(camera, renderer.domElement);
+		
+		camera.position.set(200,200,500);
+		controls.target.set(200,200,0);
+		controls.update();
+		
+
+		
 		let mouse = new THREE.Vector2();
 		this.three = {mouse, hoverTokens, tokensOnScene, camera, renderer, scene, controls, raycaster};
-
+		window._three = this.three;
+	
 		renderer.setClearColor( 0xffffff, 1 );
 		renderer.setPixelRatio(window.devicePixelRatio);
 		renderer.setSize($container.width(), $container.height());
@@ -89,6 +99,35 @@ if(Meteor.isClient) {
 		light.position.set(100,500,200);
 		light.castShadow = true;
 		scene.add(light);
+
+
+		// add game-grid
+		function createGrid(){
+			function createHorizontalWall(){
+				let geometry = new THREE.BoxGeometry( WIDTH * SCALE, 3, 10 );
+				let material = new THREE.MeshLambertMaterial( {color: 0x333333} );
+				return new THREE.Mesh( geometry, material );
+			}
+			function createVerticalWall(){
+				let geometry = new THREE.BoxGeometry( 3, WIDTH * SCALE, 10 );
+				let material = new THREE.MeshLambertMaterial( {color: 0x333333} );
+				return new THREE.Mesh( geometry, material );
+			}
+			for(let column = 0; column <= WIDTH; column++) {
+				let wall = createHorizontalWall();
+				wall.position.set(SCALE*WIDTH/2,SCALE*column,0);
+				scene.add(wall);
+			}
+			for(let row = 0; row <= HEIGHT; row++) {
+				let wall = createVerticalWall();
+				wall.position.set(SCALE*row,SCALE*HEIGHT/2,0);
+				scene.add(wall);
+			}
+		
+		}
+		createGrid();
+		
+	
 
 
 
@@ -133,7 +172,7 @@ if(Meteor.isClient) {
 	 				else
 	 					token.material.opacity = 0;
 	 			}
-	 			//TWEEN.update(time);
+	 			TWEEN.update(time);
 	 		}
 	 	}
 	 	render();
@@ -142,10 +181,23 @@ if(Meteor.isClient) {
 	 	let observeHandle = GameTokens.find({game_id: this.data._id}).observeChanges({
 	 		added(id, fields) {
 	 			let token = Helpers.createToken({playerNumber: fields.player});
-	 			token.position.set(... Helpers.getScaledPosition(fields));
+	 			
+	 			let [x,y,z] = Helpers.getScaledPosition(fields);
+	 			token.position.set(x,y+300,z);
+	 			let tween = new TWEEN.Tween(token.position);
+	 			tween.to({x,y,z}, 600);
+	 			tween.easing(TWEEN.Easing.Cubic.In);
+	 			tween.start()
+	 			
 	 			tokensOnScene.set(id, token);
 	 			scene.add(token);
 	 			updateHoverTokens();
+	 			let tweenControls = new TWEEN.Tween(controls.target);
+	 			tweenControls.easing(TWEEN.Easing.Quadratic.InOut);
+	 			tweenControls.to({x,y,z}, 600);
+	 			tweenControls.onUpdate(()=>{controls.update();});
+	 			tweenControls.start()
+					
 
 	 		},
 	 		
@@ -174,7 +226,7 @@ if(Meteor.isClient) {
 }
 
 
-let SCALE = 50;
+
 Helpers = {
 	createToken({playerNumber}) {
 		let geometry = new THREE.CylinderGeometry(22, 22, 10, 32 );
@@ -193,7 +245,7 @@ Helpers = {
 		return token;
 	},
 	getScaledPosition({x,y}) {
-		return [x * SCALE,y * SCALE, 0];
+		return [x * SCALE + SCALE/2,y * SCALE + SCALE/2, 0];
 	},
 	getLastTokenOnx({game_id, x}) {
 		return GameTokens.findOne({game_id, x}, {sort: {y:-1}});
