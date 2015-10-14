@@ -78,7 +78,7 @@ if(Meteor.isClient) {
 		let raycaster = new THREE.Raycaster();
 		let camera = new THREE.PerspectiveCamera(75, $container.width()/$container.height(), 0.1, 10000);
 		let controls = new THREE.OrbitControls(camera, renderer.domElement);
-		
+
 		camera.position.set(200,200,500);
 		controls.target.set(200,200,0);
 		controls.update();
@@ -170,7 +170,7 @@ if(Meteor.isClient) {
 	 				if(raycaster.intersectObject(token).length > 0)
 	 					token.material.opacity = 0.5;
 	 				else
-	 					token.material.opacity = 0;
+	 					token.material.opacity = 0.2;
 	 			}
 	 			TWEEN.update(time);
 	 		}
