@@ -20,6 +20,10 @@ Games.helpers({
 
 
 if(Meteor.isServer) {
+	Meteor.publish("games", function(){
+		return Games.find();
+
+	});
 	Meteor.publishComposite("game", function(game_id){
 		return {
 			find() {
@@ -29,7 +33,14 @@ if(Meteor.isServer) {
 				find(game) {
 					return GameTokens.find({game_id});
 				}
-			}]
+			},
+			{
+				find(game) {
+					let userIds = _.pluck(game.players, "userId");
+					return Meteor.users.find({_id: {$in: userIds}}, {fields: {name: true}});
+				}
+			}
+			]
 		}
 	});
 }

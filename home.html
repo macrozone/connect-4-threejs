@@ -6,9 +6,36 @@
 		<h2>Because reasons</h2>
 		<button class="btn btn-create-new-game">Create new Game</button>
 
+		<h3>Open games - looking for opponents!</h3>
+		<ul>
+		{{#each gamesOpen}}
+			{{>home_game}}
+		{{/each}}
+		</ul>
+
+
+		<h3>Running games - you can go spectator mode!</h3>
+		<ul>
+		{{#each gamesRunning}}
+			{{>home_game}}
+		{{/each}}
+		</ul>
+
+
+		<h3>Finished games - lern from the best!</h3>
+		<ul>
+		{{#each gamesClosed}}
+			{{>home_game}}
+		{{/each}}
+		</ul>
+
 
 
 
 	</div>
 
+</template>
+
+<template name="home_game">
+<li><a href="{{pathFor route='game'}}">{{_id}} Go!</a></li>
 </template>

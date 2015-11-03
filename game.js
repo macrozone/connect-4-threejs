@@ -52,6 +52,18 @@ if(Meteor.isClient) {
 				let {object} = intersections[0];
 				if(template.data.isUsersTurn(Meteor.userId())) {
 					Meteor.call("doTurn", {game_id: template.data._id, x: object.tokenX}, (error, newtokenId) => {
+						let game = Games.findOne(template.data._id);
+						if(game.finished) {
+							if(game.getCurrentPlayer().userId === Meteor.userId())
+							{
+								alert("You won!!!!");
+							}
+							else
+							{
+
+								alert("Loser !!!!");
+							}
+						}
 						
 					});
 				}else {
@@ -358,7 +370,9 @@ Meteor.methods({
 	doTurn({game_id, x}) {
 
 		let game = Games.findOne(game_id);
-
+		if(game.finished) {
+			throw new Meteor.Error("Game is closed");
+		}
 		if(!game.isUsersTurn(this.userId))
 		{
 			throw new Meteor.Error("its not your turn!");
@@ -382,7 +396,9 @@ Meteor.methods({
 		}
 		let players = game.players;
 		players[playerNumber-1].userId = this.userId;
-		Games.update(game._id, {$set:{players}});
+
+		let closed = _.every(players, (player) => _.isString(player.userId));
+		Games.update(game._id, {$set:{players, closed}});
 
 
 	}

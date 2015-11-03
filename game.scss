@@ -2,27 +2,44 @@
 	
 
 	display: flex;
+	height: 100%;
+	align-items: stretch;
+	flex-direction: row;
 	& > * {
 		width: 100%;
-		flex-direction: row;
 		
+		flex-basis: 0%;
+	}
+
+	@media screen and (max-width: 640px) {
+		flex-direction: column;
 	}
 	.game_canvas {
 		
-		flex-grow: 2;
+		flex-grow: 3;
 		min-width: 300px;
-		height: 800px;
+		
 
 	}
 
 	.game-info {
-		min-width: 200px;
-		max-width: 300px;
+		
 		flex-grow: 1;
 		border-radius: 8px;
 		border: 1px dashed #333;
 		padding: 10px;
+
+		.player-info {
+
+
+
 		.player {
+
+			.playerNameInput {
+				padding: 8px 12px;
+				margin: 10px 0px;
+			}
+	
 			margin: 10px 0px;
 			&.active {
 				font-weight: bold;
@@ -37,5 +54,6 @@
 				color: red;
 			}
 		}
+	}
 	}
 }
