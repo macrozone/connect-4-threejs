@@ -22,4 +22,8 @@ iron:router
 fourseven:scss
 reywood:publish-composite
 infinitedg:tween
-twbs:bootstrap
+artwells:accounts-guest
+dburles:collection-helpers
+accounts-password
+check
+random

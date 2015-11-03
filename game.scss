@@ -1,0 +1,41 @@
+.game {
+	
+
+	display: flex;
+	& > * {
+		width: 100%;
+		flex-direction: row;
+		
+	}
+	.game_canvas {
+		
+		flex-grow: 2;
+		min-width: 300px;
+		height: 800px;
+
+	}
+
+	.game-info {
+		min-width: 200px;
+		max-width: 300px;
+		flex-grow: 1;
+		border-radius: 8px;
+		border: 1px dashed #333;
+		padding: 10px;
+		.player {
+			margin: 10px 0px;
+			&.active {
+				font-weight: bold;
+				&:before {
+					content: ">";
+					padding-right: 10px;
+					float: left;
+				}
+			}
+			color: blue;
+			&:first-child {
+				color: red;
+			}
+		}
+	}
+}

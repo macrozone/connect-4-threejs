@@ -1,0 +1,11 @@
+<template name="game_aPlayer">
+	<li class="player {{#if active}}active{{/if}}">
+	<p class="player-number">Player {{player.number}}</p>
+		{{#if game.playerIsPicked player.number}}
+			<p class="name">{{name}}</p>
+		{{else}}
+			<button class="btn btn-pick">I want to play!!!</button>
+		{{/if}}
+
+	</li>
+</template>

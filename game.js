@@ -11,7 +11,6 @@ Router.route("/game/:_id", {
 			game: Games.findOne(this.params._id)
 		};
 	},
-	layoutTemplate: "layout",
 	subscriptions(){
 		return Meteor.subscribe("game", this.params._id);
 	}
@@ -21,12 +20,14 @@ Router.route("/game/:_id", {
 
 
 if(Meteor.isClient) {
+	Session.set("deviceorientation", {alpha: 0, beta: 0, gamma: 0});
+	$(window).on("deviceorientation", ({originalEvent}) => 
+		Session.set("deviceorientation", {alpha: originalEvent.alpha, beta: originalEvent.beta, gamma: originalEvent.gamma}));
+		
 
-	Template.game.helpers({
-		active(number) {
-			return number === this.currentPlayer
-		}
-	});
+	
+
+
 
 	var update3dMouse = function({clientX, clientY, template}) {
 		// update 3d mouse position
@@ -38,14 +39,7 @@ if(Meteor.isClient) {
 	}
 	
 	Template.game_canvas.events({
-		'click .btn-doTurn': function (event, template) {
-			Meteor.call("doTurn", {x: 0, game_id: template.data._id}, (error, tokenId) => {
-				let token = template.three.tokensOnScene.get(tokenId);
-				let {x,y,z} = token.position;
-				template.three.controls.center.set(x,y,z);
-				template.three.controls.update()
-			});
-		},
+
 		'mousemove': function({clientX, clientY}, template) {
 			update3dMouse({clientX, clientY, template});
 		},
@@ -53,19 +47,22 @@ if(Meteor.isClient) {
 			update3dMouse({clientX, clientY, template});
 			let {raycaster, hoverTokens, tokensOnScene, camera} = template.three;
 			let intersections = raycaster.intersectObjects(hoverTokens);
-			if(intersections.length > 0)
+			if(intersections.length > 0 && ! template.data.finished)
 			{
 				let {object} = intersections[0];
-				Meteor.call("doTurn", {game_id: template.data._id, x: object.tokenX}, (error, newtokenId) => {
-					
-				});
+				if(template.data.isUsersTurn(Meteor.userId())) {
+					Meteor.call("doTurn", {game_id: template.data._id, x: object.tokenX}, (error, newtokenId) => {
+						
+					});
+				}else {
+					alert("its not your turn");
+				}
 
 			}
 
 
 		}
-
-				
+	
 	});
 
 	
@@ -126,10 +123,7 @@ if(Meteor.isClient) {
 		
 		}
 		createGrid();
-		
 	
-
-
 
 		// add fake hover tokens
 		for(let x = 0; x<WIDTH; x++) {
@@ -159,13 +153,31 @@ if(Meteor.isClient) {
 		$(window).on("resize", onWindowResize);
 		this.view.onViewDestroyed(() => {$(window).off("resize", onWindowResize)});
 
+		this.autorun(() =>{
+			let {alpha, beta, gamma} = Session.get("deviceorientation");
+			//console.log(controls);
+			//camera.rotation.x = beta * Math.PI / 180;
+			//camera.rotation.y = gamma * Math.PI / 180;
+			//camera.rotation.z = alpha * Math.PI / 180;
+			//camera.lookAt(controls.target);
+			//controls.update()
+
+		});
 	 	// main render loop
 	 	render = (time) => {
 	 		if(!this.view.isDestroyed) {
 	 			requestAnimationFrame(render);
 	 			renderer.render(scene, camera);
 	 			raycaster.setFromCamera(mouse, camera);
-	 			// update mouse over
+	 			for([id, token] of tokensOnScene) {
+	 				
+	 				if(token.isSolution) {
+	 					token.material.opacity = 0.3;
+	 				}
+	 				else {
+	 					token.material.opacity = 1;
+	 				}
+	 			}
 	 			for(token of hoverTokens) {
 	 				if(raycaster.intersectObject(token).length > 0)
 	 					token.material.opacity = 0.5;
@@ -196,7 +208,9 @@ if(Meteor.isClient) {
 	 			tweenControls.easing(TWEEN.Easing.Quadratic.InOut);
 	 			tweenControls.to({x,y,z}, 600);
 	 			tweenControls.onUpdate(()=>{controls.update();});
-	 			tweenControls.start()
+	 			tweenControls.start();
+	 			token.isSolution = fields.isSolution;
+	 			
 					
 
 	 		},
@@ -206,13 +220,17 @@ if(Meteor.isClient) {
 	 			let token = tokensOnScene.get(id);
 	 			token.position.set(...Helpers.getScaledPosition(fields));
 	 			updateHoverTokens();
+	 			token.isSolution = fields.isSolution;
 	 		},
 	 		removed(id) {
+	 			
 	 			let thing = tokensOnScene.get(id);
 	 			scene.remove(thing);
 	 			tokensOnScene.delete(id);
 
+	 			
 	 		}
+	 			
 	 	});
 
 	 	this.view.onViewDestroyed(()=> {
@@ -231,7 +249,7 @@ Helpers = {
 	createToken({playerNumber}) {
 		let geometry = new THREE.CylinderGeometry(22, 22, 10, 32 );
 		let color = playerNumber === 1 ? "red" : "blue";
-		let material = new THREE.MeshLambertMaterial({color});
+		let material = new THREE.MeshLambertMaterial({color, opacity: 1, transparent: true});
 		let token = new THREE.Mesh(geometry, material);
 		token.rotateX(Math.PI/2);
 		return token;
@@ -262,21 +280,111 @@ Helpers = {
 }
 
 
+isGameOver = function({game_id, lastTokenId}) {
+	let lastToken = GameTokens.findOne(lastTokenId);
+	// horizontal
+	function findSolution({x_before, x_after, y_before, y_after}){
+		let solution = [lastToken];
+
+
+		let beforeToken = true;
+		let afterToken = true;
+
+		for(let i=1;i<4;i++) {
+			if(beforeToken)
+				beforeToken = GameTokens.findOne({game_id, x: x_before(i), y: y_before(i), player: lastToken.player});
+			if(beforeToken) { solution.push(beforeToken)};
+			if(afterToken)
+				afterToken = GameTokens.findOne({game_id, x: x_after(i), y: y_after(i), player: lastToken.player});
+			if(afterToken) { solution.push(afterToken)};
+		}
+		return solution;
+	};
+
+	
+	handleSolution(findSolution({
+		x_before: (i) => lastToken.x-i,
+		x_after: (i) => lastToken.x+i,
+		y_before: (i) => lastToken.y,
+		y_after: (i) => lastToken.y
+	}));
+	handleSolution(findSolution({
+		x_before: (i) => lastToken.x,
+		x_after: (i) => lastToken.x,
+		y_before: (i) => lastToken.y-i,
+		y_after: (i) => lastToken.y+i
+	}));
+	handleSolution(findSolution({
+		x_before: (i) => lastToken.x-i,
+		x_after: (i) => lastToken.x+i,
+		y_before: (i) => lastToken.y-i,
+		y_after: (i) => lastToken.y+i
+	}));
+	handleSolution(findSolution({
+		x_before: (i) => lastToken.x-i,
+		x_after: (i) => lastToken.x+i,
+		y_before: (i) => lastToken.y+i,
+		y_after: (i) => lastToken.y-i
+	}));
+
+	function handleSolution(tokens) {
+		if(tokens.length >= 4){
+			for(token of tokens) {
+				GameTokens.update(token._id, {$set: {isSolution: true}});
+			}
+			Games.update(game_id, {$set:{finished: true, winner: lastToken.player}});
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+
+
+}
+
 Meteor.methods({
 	createNewGame() {
 		let _id = Games.insert({
-			currentPlayer: 1
+			currentPlayer: 1,
+			players: [
+				{number: 1, userId: null},
+				{number: 2, userId: null}
+			]
 		});
 		return _id;
 	},
 
 	doTurn({game_id, x}) {
 
-		let {currentPlayer} = Games.findOne(game_id);
+		let game = Games.findOne(game_id);
+
+		if(!game.isUsersTurn(this.userId))
+		{
+			throw new Meteor.Error("its not your turn!");
+		}
 		let y = Helpers.getNextFreeYPosition({game_id, x});
-		let newTokenId = GameTokens.insert({game_id, x, y, player:currentPlayer});
-		Games.update(game_id, {$set:{currentPlayer: (currentPlayer%2)+1}});
+		let newTokenId = GameTokens.insert({game_id, x, y, player:game.currentPlayer});
+
+		if(isGameOver({game_id,lastTokenId: newTokenId})){
+			console.log("won");
+		}
+
+		Games.update(game_id, {$set:{currentPlayer: (game.currentPlayer%2)+1}});
 		return newTokenId;
+	},
+
+	pickPlayer({gameId, playerNumber}) {
+		let game = Games.findOne(gameId);
+		if(game.playerIsPicked(playerNumber))
+		{
+			throw new Meteor.Error("player is already picked");
+		}
+		let players = game.players;
+		players[playerNumber-1].userId = this.userId;
+		Games.update(game._id, {$set:{players}});
+
+
 	}
 });
 

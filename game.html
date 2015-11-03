@@ -7,14 +7,9 @@
 		<aside class="game-info">
 			<p>{{id}}</p>
 			<ul class="player-info">
-				<li class="player {{#if active 1}}active{{/if}}">
-					<p class="player-number">Spieler 1</p><p class="name">Iris Gleichen</p>
-
-				</li>
-				<li class="player {{#if active 2}}active{{/if}}">
-					<p class="player-number">Spieler 2</p><p class="name">Rainer Zufall</p>
-
-				</li>
+				{{#each players}}
+					{{>game_aPlayer game=.. player=this}}
+				{{/each}}
 			</ul>
 			<p class="game-desc">The cross-functional, dramatic, large-scale and results-oriented innovations interact with our governance using our scenario-based projects. </p>
 		</aside>
@@ -39,3 +34,4 @@
 
 
 </template>
+
